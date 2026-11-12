@@ -1,0 +1,27 @@
+const jwt = require('jsonwebtoken');
+const { failure } = require('../utils/apiResponse');
+const User = require('../models/User');
+
+const JWT_SECRET =
+  process.env.JWT_ACCESS_SECRET || 'dev_access_secret_change_me_32chars_min';
+
+const requireAuth = async (req, res, next) => {
+  try {
+    const header = req.headers.authorization || '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+    if (!token) {
+      return failure(res, { message: 'Authentication required', statusCode: 401 });
+    }
+    const payload = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(payload.sub);
+    if (!user || user.status === 'banned') {
+      return failure(res, { message: 'Invalid session', statusCode: 401 });
+    }
+    req.user = user;
+    return next();
+  } catch (error) {
+    return failure(res, { message: 'Invalid or expired token', statusCode: 401 });
+  }
+};
+
+module.exports = { requireAuth, JWT_SECRET };
