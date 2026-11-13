@@ -63,6 +63,20 @@ const register = async (req, res, next) => {
     await Profile.create({ userId: user._id });
     const token = signToken(user);
     const profile = await Profile.findOne({ userId: user._id });
+
+    // Welcome bot + push (non-blocking)
+    setImmediate(() => {
+      try {
+        // eslint-disable-next-line global-require
+        const { onboardNewUser } = require('../services/botService');
+        const io = req.app.get('io');
+        onboardNewUser(user._id, io);
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn('Onboard bot failed', error.message);
+      }
+    });
+
     return success(res, {
       message: 'Account created',
       statusCode: 201,
