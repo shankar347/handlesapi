@@ -31,6 +31,8 @@ const env = {
   ]),
   host: process.env.HOST || '0.0.0.0',
   isProduction: (process.env.NODE_ENV || 'development') === 'production',
+  jwtAccessSecret: process.env.JWT_ACCESS_SECRET || '',
+  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || '',
 };
 
 module.exports = env;

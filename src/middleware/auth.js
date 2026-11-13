@@ -1,9 +1,10 @@
 const jwt = require('jsonwebtoken');
 const { failure } = require('../utils/apiResponse');
 const User = require('../models/User');
+const env = require('../config/env');
 
 const JWT_SECRET =
-  process.env.JWT_ACCESS_SECRET || 'dev_access_secret_change_me_32chars_min';
+  env.jwtAccessSecret || process.env.JWT_ACCESS_SECRET || '';
 
 const requireAuth = async (req, res, next) => {
   try {
