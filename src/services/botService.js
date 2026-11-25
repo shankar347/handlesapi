@@ -16,6 +16,7 @@ const ensureBotUser = async () => {
     email: BOT_EMAIL,
     passwordHash,
     onboardingComplete: true,
+    emailVerified: true,
     role: 'admin',
   });
   await Profile.create({
@@ -77,7 +78,7 @@ const sendBotMessage = async (userId, text, io = null) => {
 const onboardNewUser = async (userId, io = null) => {
   await sendBotMessage(
     userId,
-    'Welcome to Handles! I’m your in-app guide. Swipe photos with your finger, like what sparks a conversation, and I’ll tip you along the way.',
+    'Welcome to Handles! 👋 I’m your guide. Finish your profile, like people who feel like a fit, and I’ll nudge you when something good happens — new likes, matches, and plan updates.',
     io,
   );
   await notifyWelcome(userId);

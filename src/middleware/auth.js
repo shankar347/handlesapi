@@ -25,4 +25,27 @@ const requireAuth = async (req, res, next) => {
   }
 };
 
-module.exports = { requireAuth, JWT_SECRET };
+const requireEmailVerified = (req, res, next) => {
+  if (!req.user?.emailVerified) {
+    return failure(res, {
+      message: 'Verify your email before opening Home',
+      statusCode: 403,
+      data: { code: 'EMAIL_UNVERIFIED' },
+    });
+  }
+  return next();
+};
+
+const requireAdmin = (req, res, next) => {
+  if (req.user?.role !== 'admin' || req.user.email === 'handles.bot@handles.app') {
+    return failure(res, { message: 'Admin access required', statusCode: 403 });
+  }
+  return next();
+};
+
+module.exports = {
+  requireAuth,
+  requireEmailVerified,
+  requireAdmin,
+  JWT_SECRET,
+};

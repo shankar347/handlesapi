@@ -4,6 +4,8 @@ const Profile = require('../models/Profile');
 const User = require('../models/User');
 const { success, failure } = require('../utils/apiResponse');
 const { notifyNewMessage } = require('../services/pushService');
+const { assertChatAllowed } = require('../services/likeService');
+const { notifyOnce } = require('../services/notificationService');
 const { ensureBotUser, openBotConversation } = require('../services/botService');
 
 const getIo = (req) => req.app.get('io');
@@ -12,8 +14,9 @@ const serializeConversation = async (conversation, currentUserId) => {
   const otherId = conversation.participants
     .map((id) => String(id))
     .find((id) => id !== String(currentUserId));
-  const [profile, unread] = await Promise.all([
+  const [profile, myProfile, unread] = await Promise.all([
     Profile.findOne({ userId: otherId }).lean(),
+    Profile.findOne({ userId: currentUserId }).lean(),
     Message.countDocuments({
       conversationId: conversation._id,
       senderId: { $ne: currentUserId },
@@ -26,6 +29,8 @@ const serializeConversation = async (conversation, currentUserId) => {
     otherUserId: otherId,
     name: profile?.name || (conversation.isBot ? 'Handles' : 'Match'),
     avatar: profile?.photos?.[0] || null,
+    myAvatar: myProfile?.photos?.[0] || null,
+    otherAvatar: profile?.photos?.[0] || null,
     preview: conversation.lastMessageText || '',
     lastMessageAt: conversation.lastMessageAt,
     unread,
@@ -99,6 +104,14 @@ const getMessages = async (req, res, next) => {
 const sendMessage = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const requestedType = String(req.body?.type || 'text').toLowerCase();
+    if (requestedType !== 'text' || req.body?.image || req.body?.document || req.body?.fileUrl) {
+      return failure(res, {
+        message: 'Only text messages are allowed. Photos and documents are disabled.',
+        statusCode: 400,
+        data: { code: 'TEXT_ONLY' },
+      });
+    }
     const text = String(req.body?.text || '').trim();
     if (!text) {
       return failure(res, { message: 'Message text required', statusCode: 400 });
@@ -110,6 +123,15 @@ const sendMessage = async (req, res, next) => {
       !conversation.participants.some((p) => String(p) === String(req.user._id))
     ) {
       return failure(res, { message: 'Conversation not found', statusCode: 404 });
+    }
+
+    const allowed = await assertChatAllowed(req.user._id, conversation);
+    if (!allowed.ok) {
+      return failure(res, {
+        message: allowed.message,
+        statusCode: allowed.status,
+        data: { code: allowed.code },
+      });
     }
 
     const message = await Message.create({
@@ -156,6 +178,32 @@ const sendMessage = async (req, res, next) => {
         text,
         conversationId: conversation._id,
       });
+      if (!conversation.isBot) {
+        await notifyOnce(recipientId, {
+          dedupeKey: `chat:${message._id}`,
+          type: 'chat_message',
+          title: 'You received a new message',
+          body: 'You received a new message.',
+          data: { route: 'Chat', conversationId: String(conversation._id) },
+          push: false,
+        });
+        await notifyOnce(recipientId, {
+          dedupeKey: `unread:${message._id}`,
+          type: 'unread_messages',
+          title: 'You have unread messages',
+          body: 'You have unread messages.',
+          data: { route: 'Chat', conversationId: String(conversation._id) },
+          push: false,
+        });
+        await notifyOnce(recipientId, {
+          dedupeKey: `waiting:${message._id}`,
+          type: 'waiting_reply',
+          title: 'Your match is waiting for your reply',
+          body: 'Your match is waiting for your reply.',
+          data: { route: 'Chat', conversationId: String(conversation._id) },
+          push: false,
+        });
+      }
     }
 
     if (io) {
@@ -239,6 +287,16 @@ const startConversation = async (req, res, next) => {
     const other = await User.findById(otherUserId);
     if (!other) {
       return failure(res, { message: 'User not found', statusCode: 404 });
+    }
+    const { pairKeyFor } = require('../services/likeService');
+    const Match = require('../models/Match');
+    const match = await Match.findOne({ pairKey: pairKeyFor(req.user._id, otherUserId) });
+    if (!match) {
+      return failure(res, {
+        message: 'Chat opens after you both like each other.',
+        statusCode: 403,
+        data: { code: 'MATCH_REQUIRED' },
+      });
     }
 
     let conversation = await Conversation.findOne({

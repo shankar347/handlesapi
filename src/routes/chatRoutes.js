@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireEmailVerified } = require('../middleware/auth');
 const {
   listConversations,
   getMessages,
@@ -9,7 +9,7 @@ const {
 
 const router = express.Router();
 
-router.use(requireAuth);
+router.use(requireAuth, requireEmailVerified);
 router.get('/conversations', listConversations);
 router.post('/conversations', startConversation);
 router.get('/conversations/:id/messages', getMessages);

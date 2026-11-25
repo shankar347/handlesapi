@@ -8,3 +8,9 @@ coverage/
 npm-debug.log*
 .idea/
 .vscode/
+uploads/faces/*
+
+.vercel
+.env*
+firebase-service-account.json
+*-firebase-adminsdk*.json

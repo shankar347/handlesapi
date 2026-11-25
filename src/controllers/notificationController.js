@@ -1,10 +1,13 @@
 const DeviceToken = require('../models/DeviceToken');
+const AppNotification = require('../models/AppNotification');
+const User = require('../models/User');
 const { success, failure } = require('../utils/apiResponse');
 const {
   notifyWelcome,
   notifyProfileTip,
   sendToUser,
 } = require('../services/pushService');
+const { flushPendingPushes } = require('../services/notificationService');
 
 const registerDevice = async (req, res, next) => {
   try {
@@ -25,9 +28,12 @@ const registerDevice = async (req, res, next) => {
       { upsert: true, new: true },
     );
 
+    // Signup/login often creates alerts before FCM is registered — deliver them now.
+    const flushed = await flushPendingPushes(req.user._id).catch(() => ({ sent: 0 }));
+
     return success(res, {
       message: 'Device registered for push notifications',
-      data: { registered: true },
+      data: { registered: true, flushed },
     });
   } catch (error) {
     return next(error);
@@ -68,8 +74,62 @@ const sendTestPush = async (req, res, next) => {
   }
 };
 
+const listNotifications = async (req, res, next) => {
+  try {
+    const rows = await AppNotification.find({ userId: req.user._id })
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+    return success(res, {
+      message: 'Notifications loaded',
+      data: {
+        notifications: rows.map((row) => ({
+          id: String(row._id),
+          type: row.type,
+          title: row.title,
+          body: row.body,
+          data: row.data,
+          read: row.read,
+          createdAt: row.createdAt,
+        })),
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const markRead = async (req, res, next) => {
+  try {
+    await AppNotification.updateOne(
+      { _id: req.params.id, userId: req.user._id },
+      { $set: { read: true } },
+    );
+    return success(res, { message: 'Notification read' });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const updatePreferences = async (req, res, next) => {
+  try {
+    const current = req.user.notificationPrefs || { push: true, inApp: true };
+    const nextPrefs = {
+      push: req.body?.push == null ? current.push !== false : Boolean(req.body.push),
+      inApp: req.body?.inApp == null ? current.inApp !== false : Boolean(req.body.inApp),
+    };
+    await User.findByIdAndUpdate(req.user._id, { notificationPrefs: nextPrefs });
+    return success(res, { message: 'Preferences saved', data: { notificationPrefs: nextPrefs } });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   registerDevice,
   unregisterDevice,
   sendTestPush,
+  listNotifications,
+  markRead,
+  updatePreferences,
 };

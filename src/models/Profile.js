@@ -27,6 +27,12 @@ const profileSchema = new mongoose.Schema(
     prompt: { type: String, default: '' },
     bio: { type: String, default: '' },
     photos: { type: [String], default: [] },
+    facePhotoUrl: { type: String, default: '' },
+    faceVerified: { type: Boolean, default: false },
+    faceVerifiedAt: { type: Date, default: null },
+    faceSkipped: { type: Boolean, default: false },
+    faceSkippedAt: { type: Date, default: null },
+    faceConsentAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
