@@ -4,6 +4,8 @@ const appSettingSchema = new mongoose.Schema(
   {
     key: { type: String, required: true, unique: true },
     freeLikeLimit: { type: Number, default: 10 },
+    freeLikeLimitWoman: { type: Number, default: 50 },
+    freeLikeLimitMan: { type: Number, default: 10 },
     trialDays: { type: Number, default: 7 },
   },
   { timestamps: true },

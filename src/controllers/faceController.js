@@ -33,6 +33,48 @@ const verifyFace = async (req, res, next) => {
         data: { code: 'CONSENT_REQUIRED' },
       });
     }
+
+    // Scan-only flow: no photo/video capture — mark verified after client scan UX.
+    if (req.body?.scanOnly === true) {
+      const now = new Date();
+      await FaceAttempt.create({
+        userId: req.user._id,
+        success: true,
+        reason: 'scan_only',
+      });
+      await Profile.findOneAndUpdate(
+        { userId: req.user._id },
+        {
+          $set: {
+            faceVerified: true,
+            faceVerifiedAt: now,
+            faceConsentAt: now,
+            faceSkipped: false,
+          },
+        },
+        { upsert: true },
+      );
+      const { freeLikeLimit } = await getSettings();
+      await notifyOnce(req.user._id, {
+        dedupeKey: `face-success:${req.user._id}`,
+        type: 'face_verified',
+        title: 'Your face verification is successful',
+        body: 'Your face verification is successful.',
+        data: { route: 'Profile' },
+      });
+      await notifyOnce(req.user._id, {
+        dedupeKey: `free-likes-granted:${req.user._id}`,
+        type: 'free_likes',
+        title: `You have ${freeLikeLimit} free likes available`,
+        body: `You have ${freeLikeLimit} free likes available.`,
+        data: { route: 'Discover' },
+      });
+      return success(res, {
+        message: 'Face verified',
+        data: { faceVerified: true, faceVerifiedAt: now, scanOnly: true },
+      });
+    }
+
     const imageBase64 = String(req.body?.imageBase64 || '');
     if (!imageBase64) {
       return failure(res, { message: 'A selfie is required', statusCode: 400 });

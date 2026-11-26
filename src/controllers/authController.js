@@ -106,9 +106,19 @@ const register = async (req, res, next) => {
     });
 
     return success(res, {
-      message: 'Account created',
+      message: verification.emailDelivered
+        ? 'Account created — check your email for the code'
+        : 'Account created — use the verification code shown in the app',
       statusCode: 201,
-      data: { token, user: publicUser(user, profile), devCode: verification.devCode },
+      data: {
+        token,
+        user: publicUser(user, profile),
+        devCode: verification.devCode,
+        emailDelivered: Boolean(verification.emailDelivered),
+        emailProvider: verification.provider,
+        emailPreviewUrl: verification.previewUrl,
+        emailError: verification.error,
+      },
     });
   } catch (error) {
     return next(error);
@@ -192,8 +202,17 @@ const resendVerification = async (req, res, next) => {
       data: { route: 'EmailVerify' },
     });
     return success(res, {
-      message: 'Verification email sent',
-      data: { sent: true, devCode: verification.devCode },
+      message: verification.emailDelivered
+        ? 'Verification email sent'
+        : 'Code ready — check the app if email is not configured yet',
+      data: {
+        sent: true,
+        emailDelivered: Boolean(verification.emailDelivered),
+        emailProvider: verification.provider,
+        emailPreviewUrl: verification.previewUrl,
+        emailError: verification.error,
+        devCode: verification.devCode,
+      },
     });
   } catch (error) {
     return next(error);
@@ -222,6 +241,27 @@ const markHomeReached = async (req, res, next) => {
   }
 };
 
+const checkEmail = async (req, res, next) => {
+  try {
+    const email = String(req.body?.email || '')
+      .toLowerCase()
+      .trim();
+    if (!email || !email.includes('@')) {
+      return failure(res, { message: 'Valid email is required', statusCode: 400 });
+    }
+    const existing = await User.findOne({ email }).select('_id').lean();
+    if (existing) {
+      return failure(res, { message: 'Email already registered', statusCode: 409 });
+    }
+    return success(res, {
+      message: 'Email available',
+      data: { available: true },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -229,4 +269,5 @@ module.exports = {
   verifyEmail,
   resendVerification,
   markHomeReached,
+  checkEmail,
 };

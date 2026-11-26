@@ -142,6 +142,8 @@ const summary = async (req, res, next) => {
           withRemaining: remaining,
           purchasedAfterExhaust,
           limit: settings.freeLikeLimit,
+          limitWoman: settings.freeLikeLimitWoman,
+          limitMan: settings.freeLikeLimitMan,
         },
         subscriptions: tally,
         matching: {
@@ -235,8 +237,15 @@ const userDetail = async (req, res, next) => {
           onboardingComplete: user.onboardingComplete,
           homeReachedAt: user.homeReachedAt,
           freeLikesUsed: likesUsed,
-          freeLikesRemaining: Math.max(0, settings.freeLikeLimit - likesUsed),
-          freeLikeLimit: settings.freeLikeLimit,
+          freeLikesRemaining: Math.max(
+            0,
+            (String(profile?.gender || '').toLowerCase().includes('wom')
+              ? settings.freeLikeLimitWoman
+              : settings.freeLikeLimitMan) - likesUsed,
+          ),
+          freeLikeLimit: String(profile?.gender || '').toLowerCase().includes('wom')
+            ? settings.freeLikeLimitWoman
+            : settings.freeLikeLimitMan,
           subscription: subscription
             ? {
                 planId: subscription.planId,

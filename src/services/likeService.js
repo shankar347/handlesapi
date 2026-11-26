@@ -5,7 +5,7 @@ const User = require('../models/User');
 const Conversation = require('../models/Conversation');
 const { notifyOnce } = require('./notificationService');
 const {
-  getSettings,
+  freeLikeLimitForUser,
   currentSubscription,
   isEligible,
 } = require('./platformService');
@@ -15,18 +15,19 @@ const pairKeyFor = (a, b) => [String(a), String(b)].sort().join(':');
 const likesUsed = (userId) => Like.countDocuments({ fromUser: userId, consumedFree: true });
 
 const entitlementFor = async (userId) => {
-  const [settings, used, profile, subscription] = await Promise.all([
-    getSettings(),
+  const [quota, used, profile, subscription] = await Promise.all([
+    freeLikeLimitForUser(userId),
     likesUsed(userId),
-    Profile.findOne({ userId }).select('faceVerified faceSkipped').lean(),
+    Profile.findOne({ userId }).select('faceVerified faceSkipped gender').lean(),
     currentSubscription(userId),
   ]);
   const eligible = isEligible(subscription);
-  const limit = settings.freeLikeLimit;
+  const limit = quota.limit;
   const remaining = Math.max(0, limit - used);
   return {
     faceVerified: Boolean(profile?.faceVerified),
     faceSkipped: Boolean(profile?.faceSkipped),
+    gender: profile?.gender || '',
     limit,
     used,
     remaining,
@@ -89,7 +90,7 @@ const createLike = async (fromUserId, toUserId) => {
 
   const subscription = await currentSubscription(fromUserId);
   const eligible = isEligible(subscription);
-  const { freeLikeLimit } = await getSettings();
+  const { limit: freeLikeLimit } = await freeLikeLimitForUser(fromUserId);
   const used = await likesUsed(fromUserId);
   let consumedFree = false;
   if (used < freeLikeLimit) {

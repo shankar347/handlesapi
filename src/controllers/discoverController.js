@@ -42,7 +42,7 @@ const listDiscover = async (req, res, next) => {
       email: { $not: /handles\.bot@/i },
     })
       .select('_id')
-      .limit(300)
+      .limit(800)
       .lean();
 
     const ids = users.map((user) => user._id).filter((id) => !likedIds.has(String(id)));
@@ -95,16 +95,19 @@ const listDiscover = async (req, res, next) => {
     };
 
     let matched = profiles.filter((profile) => matchesFilters(profile, { requireMutual: true }));
-    // If mutual preference is too strict (empty deck), fall back to one-way preference.
-    if (matched.length < 3) {
+    // Prefer a fuller deck: fall back to one-way prefs, then open pool with names.
+    if (matched.length < 12) {
       const relaxed = profiles.filter((profile) => matchesFilters(profile, { requireMutual: false }));
       if (relaxed.length > matched.length) matched = relaxed;
+    }
+    if (matched.length < 8) {
+      matched = profiles;
     }
 
     const cards = matched
       .map(scoreCard)
       .sort((a, b) => b.score - a.score || String(a.card.name).localeCompare(String(b.card.name)))
-      .slice(0, 80)
+      .slice(0, 120)
       .map((row) => row.card);
 
     return success(res, {
